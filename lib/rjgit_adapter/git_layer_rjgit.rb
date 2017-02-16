@@ -156,13 +156,19 @@ module Gollum
         ref = Gollum::Git.canonicalize(options[:ref])
         blobs = []
         RJGit::Porcelain.ls_tree(@git.jrepo, options[:path], ref, {:recursive => true}).each do |item|
-          walk = RevWalk.new(@git.jrepo)
-          blobs << RJGit::Blob.new(@git.jrepo, item[:mode], item[:path], walk.lookup_blob(ObjectId.from_string(item[:id]))) if item[:type] == 'blob'
+          unless options[:exclude] && options[:exclude].any?{|prefix| item[:path].start_with?(prefix)}
+            walk = RevWalk.new(@git.jrepo)
+            blobs << RJGit::Blob.new(@git.jrepo, item[:mode], item[:path], walk.lookup_blob(ObjectId.from_string(item[:id]))) if item[:type] == 'blob'
+          end
         end
         result = []
         blobs.each do |blob|
-          count = blob.data.downcase.scan(/#{query}/i).length
-          result << {:name => blob.path, :count => count} if count > 0
+          begin
+            count = blob.data.downcase.scan(/#{query}/i).length
+            result << {:name => blob.path, :count => count} if count > 0
+          rescue ArgumentError => e
+            puts "ERROR in grep of git file '#{blob.path}': #{e.message}"
+          end
         end
         result
       end
